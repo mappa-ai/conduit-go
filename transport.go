@@ -23,6 +23,7 @@ type transport struct {
 	baseURL    *url.URL
 	httpClient *http.Client
 	maxRetries int
+	telemetry  *Telemetry
 	timeout    time.Duration
 	userAgent  string
 }
@@ -51,13 +52,18 @@ func newTransport(apiKey string, config clientConfig) *transport {
 		httpClient = &http.Client{}
 	}
 	baseURL, _ := url.Parse(config.baseURL)
+	userAgent := defaultUserAgent
+	if config.userAgent != "" {
+		userAgent += " " + config.userAgent
+	}
 	return &transport{
 		apiKey:     apiKey,
 		baseURL:    baseURL,
 		httpClient: httpClient,
 		maxRetries: config.maxRetries,
+		telemetry:  config.telemetry,
 		timeout:    config.timeout,
-		userAgent:  config.userAgent,
+		userAgent:  userAgent,
 	}
 }
 
@@ -106,29 +112,32 @@ func (t *transport) requestOnce(ctx context.Context, method string, path string,
 	if len(options.query) > 0 {
 		requestURL.RawQuery = options.query.Encode()
 	}
+	startedAt := time.Now()
 
 	request, err := http.NewRequestWithContext(requestCtx, method, requestURL.String(), bytes.NewReader(options.body))
 	if err != nil {
 		return nil, &ConduitError{Code: "transport_error", Message: "failed to create request", RequestID: requestID, Cause: err}
 	}
+	request.Header = t.defaultHeaders(requestID)
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Mappa-Api-Key", t.apiKey)
-	request.Header.Set("X-Request-Id", requestID)
 	if options.idempotencyKey != "" {
 		request.Header.Set("Idempotency-Key", options.idempotencyKey)
 	}
 	if options.contentType != "" {
 		request.Header.Set("Content-Type", options.contentType)
 	}
-	if t.userAgent != "" {
-		request.Header.Set("User-Agent", t.userAgent)
-	}
 	for key, value := range options.headers {
 		request.Header.Set(key, value)
+	}
+	if t.telemetry != nil && t.telemetry.OnRequest != nil {
+		t.telemetry.OnRequest(RequestTelemetry{Method: method, RequestID: requestID, URL: requestURL.String()})
 	}
 
 	response, err := t.httpClient.Do(request)
 	if err != nil {
+		if t.telemetry != nil && t.telemetry.OnError != nil {
+			t.telemetry.OnError(ErrorTelemetry{Duration: time.Since(startedAt), Error: err, Method: method, RequestID: requestID, URL: requestURL.String()})
+		}
 		if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, &RequestAbortedError{ConduitError: newConduitError("request aborted by caller", "request_aborted", requestID, err)}
 		}
@@ -142,9 +151,15 @@ func (t *transport) requestOnce(ctx context.Context, method string, path string,
 		return nil, &ConduitError{Code: "transport_error", Message: "request failed", RequestID: requestID, Cause: err}
 	}
 	defer response.Body.Close()
+	if t.telemetry != nil && t.telemetry.OnResponse != nil {
+		t.telemetry.OnResponse(ResponseTelemetry{Duration: time.Since(startedAt), Method: method, RequestID: requestID, Status: response.StatusCode, URL: requestURL.String()})
+	}
 
 	body, readErr := io.ReadAll(response.Body)
 	if readErr != nil {
+		if t.telemetry != nil && t.telemetry.OnError != nil {
+			t.telemetry.OnError(ErrorTelemetry{Duration: time.Since(startedAt), Error: readErr, Method: method, RequestID: requestID, URL: requestURL.String()})
+		}
 		return nil, &ConduitError{Code: "transport_error", Message: "failed to read response", RequestID: requestID, Cause: readErr}
 	}
 	serverRequestID := response.Header.Get("X-Request-Id")
@@ -157,6 +172,16 @@ func (t *transport) requestOnce(ctx context.Context, method string, path string,
 
 	apiErr := parseAPIError(response.StatusCode, body, response.Header.Clone(), serverRequestID)
 	return nil, apiErr
+}
+
+func (t *transport) defaultHeaders(requestID string) http.Header {
+	headers := http.Header{}
+	headers.Set("Mappa-Api-Key", t.apiKey)
+	headers.Set("X-Request-Id", requestID)
+	if t.userAgent != "" {
+		headers.Set("User-Agent", t.userAgent)
+	}
+	return headers
 }
 
 func parseAPIError(status int, body []byte, headers http.Header, requestID string) error {
@@ -199,7 +224,7 @@ func shouldRetry(err error) bool {
 	if errors.As(err, &rateLimitErr) {
 		return true
 	}
-	var apiErr *ApiError
+	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		return apiErr.Status >= 500
 	}

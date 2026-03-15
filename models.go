@@ -5,269 +5,274 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	internalwire "github.com/mappa-ai/conduit-go/internal/wire"
 )
 
+// JobErrorData describes terminal job failure details returned by the API.
 type JobErrorData struct {
-	Code      string
-	Details   any
-	Message   string
+	// Code is the stable job error code.
+	Code string
+	// Details carries any structured failure metadata returned by the API.
+	Details any
+	// Message is the human-readable failure message.
+	Message string
+	// Retryable reports whether the job failure may succeed on retry when known.
 	Retryable *bool
 }
 
+// Usage describes job usage and billing metadata.
 type Usage struct {
+	// CreditsDiscounted is the discounted credit amount when the API reports it.
 	CreditsDiscounted *float64
-	CreditsNetUsed    float64
-	CreditsUsed       float64
-	DurationMS        *float64
-	ModelVersion      string
+	// CreditsNetUsed is the net credit usage charged for the job.
+	CreditsNetUsed float64
+	// CreditsUsed is the raw credit usage before discounts.
+	CreditsUsed float64
+	// DurationMS is the job duration in milliseconds when reported.
+	DurationMS *float64
+	// ModelVersion is the backend model version when reported.
+	ModelVersion string
 }
 
+// JobCreditReservation describes reserved-credit lifecycle details.
 type JobCreditReservation struct {
-	ReservedCredits   *float64
+	// ReservedCredits is the reserved credit amount when present.
+	ReservedCredits *float64
+	// ReservationStatus is one of active, released, or applied when present.
 	ReservationStatus string
 }
 
+// Job is the canonical async job shape returned by jobs endpoints and handles.
 type Job struct {
-	Credits         *JobCreditReservation
-	CreatedAt       string
-	Error           *JobErrorData
-	ID              string
-	MatchingID      string
-	Progress        *float64
-	ReleasedCredits *float64
-	ReportID        string
-	RequestID       string
-	Stage           string
-	Status          string
-	Type            string
-	UpdatedAt       string
-	Usage           *Usage
-}
-
-type JobEvent struct {
-	Job      *Job
+	// Credits contains reserved-credit metadata when available.
+	Credits *JobCreditReservation
+	// CreatedAt is the ISO8601 job creation timestamp.
+	CreatedAt string
+	// Error contains structured terminal failure details for failed jobs.
+	Error *JobErrorData
+	// ID is the stable job identifier.
+	ID string
+	// MatchingID is set for successful matching jobs.
+	MatchingID string
+	// Progress is advisory progress between 0 and 1 when reported.
 	Progress *float64
-	Stage    string
-	Type     string
+	// ReleasedCredits is the released credit amount when reported.
+	ReleasedCredits *float64
+	// ReportID is set for successful report jobs.
+	ReportID string
+	// RequestID is the originating API request identifier when available.
+	RequestID string
+	// Stage is the current advisory processing stage when present.
+	Stage string
+	// Status is one of queued, running, succeeded, failed, or canceled.
+	Status string
+	// Type is one of report.generate or matching.generate.
+	Type string
+	// UpdatedAt is the ISO8601 timestamp for the last job update.
+	UpdatedAt string
+	// Usage contains job usage metadata when available.
+	Usage *Usage
 }
 
+// JobEvent is emitted by JobStream and Wait callbacks.
+type JobEvent struct {
+	// Job is the latest job snapshot attached to the event.
+	Job *Job
+	// Progress is advisory progress for stage events when reported.
+	Progress *float64
+	// Stage is the current stage for stage events.
+	Stage string
+	// Type is one of status, stage, or terminal.
+	Type string
+}
+
+// ReportOutput contains rendered report representations.
 type ReportOutput struct {
-	JSON      map[string]any
-	Markdown  string
+	// JSON contains the structured report payload when available.
+	JSON map[string]any
+	// Markdown contains the markdown rendering when available.
+	Markdown string
+	// ReportURL contains a report URL when available.
 	ReportURL string
-	Template  string
+	// Template is the stable template identifier used to produce the report.
+	Template string
 }
 
+// Report is the completed report resource.
 type Report struct {
-	CreatedAt   string
-	EntityID    string
+	// CreatedAt is the ISO8601 report creation timestamp.
+	CreatedAt string
+	// EntityID is the resolved entity identifier when available.
+	EntityID string
+	// EntityLabel is the resolved entity label when available.
 	EntityLabel string
-	ID          string
-	JobID       string
-	Label       string
-	MediaID     string
-	Output      ReportOutput
+	// ID is the stable report identifier.
+	ID string
+	// JobID is the originating job identifier when available.
+	JobID string
+	// Label is the report label when available.
+	Label string
+	// MediaID is the source media identifier when available.
+	MediaID string
+	// Output contains rendered report content.
+	Output ReportOutput
 }
 
+// MatchingResolvedSubject describes a resolved matching subject in the result.
 type MatchingResolvedSubject struct {
-	EntityID      string
+	// EntityID is the resolved entity identifier when available.
+	EntityID string
+	// ResolvedLabel is the resolved display label when available.
 	ResolvedLabel string
-	Source        map[string]any
+	// Source contains source resolution metadata when provided by the API.
+	Source map[string]any
 }
 
+// MatchingOutput contains rendered matching result representations.
 type MatchingOutput struct {
-	JSON     map[string]any
+	// JSON contains the structured matching payload when available.
+	JSON map[string]any
+	// Markdown contains the markdown rendering when available.
 	Markdown string
 }
 
+// MatchingAnalysisResponse is the completed matching result resource.
 type MatchingAnalysisResponse struct {
-	Context   string
+	// Context is the stable matching context identifier.
+	Context string
+	// CreatedAt is the ISO8601 matching creation timestamp.
 	CreatedAt string
-	Group     []MatchingResolvedSubject
-	ID        string
-	JobID     string
-	Label     string
-	Output    MatchingOutput
-	Target    *MatchingResolvedSubject
+	// Group contains resolved comparison subjects.
+	Group []MatchingResolvedSubject
+	// ID is the stable matching identifier.
+	ID string
+	// JobID is the originating job identifier when available.
+	JobID string
+	// Label is the matching label when available.
+	Label string
+	// Output contains rendered matching content.
+	Output MatchingOutput
+	// Target contains the resolved target subject when available.
+	Target *MatchingResolvedSubject
 }
 
+// MediaObject is returned immediately after upload.
 type MediaObject struct {
-	ContentType     string
-	CreatedAt       string
+	// ContentType is the uploaded media content type.
+	ContentType string
+	// CreatedAt is the ISO8601 media creation timestamp.
+	CreatedAt string
+	// DurationSeconds is the detected media duration when available.
 	DurationSeconds *float64
-	Label           string
-	MediaID         string
-	SizeBytes       *int64
+	// Label is the media label.
+	Label string
+	// MediaID is the stable uploaded media identifier.
+	MediaID string
+	// SizeBytes is the media size in bytes when available.
+	SizeBytes *int64
 }
 
+// MediaRetention describes media retention state.
 type MediaRetention struct {
+	// DaysRemaining is the remaining retention window when available.
 	DaysRemaining *int64
-	ExpiresAt     string
-	Locked        bool
+	// ExpiresAt is the ISO8601 retention expiry timestamp when available.
+	ExpiresAt string
+	// Locked reports whether retention lock is enabled.
+	Locked bool
 }
 
+// MediaFile is the stored media resource returned by media APIs.
 type MediaFile struct {
-	ContentType      string
-	CreatedAt        string
-	DurationSeconds  *float64
-	Label            string
-	LastUsedAt       string
-	MediaID          string
+	// ContentType is the uploaded media content type.
+	ContentType string
+	// CreatedAt is the ISO8601 media creation timestamp.
+	CreatedAt string
+	// DurationSeconds is the detected media duration when available.
+	DurationSeconds *float64
+	// Label is the media label.
+	Label string
+	// LastUsedAt is the ISO8601 timestamp for the last use when available.
+	LastUsedAt string
+	// MediaID is the stable media identifier.
+	MediaID string
+	// ProcessingStatus is the backend processing status.
 	ProcessingStatus string
-	Retention        MediaRetention
-	SizeBytes        *int64
+	// Retention contains retention lock and expiry metadata.
+	Retention MediaRetention
+	// SizeBytes is the media size in bytes when available.
+	SizeBytes *int64
 }
 
+// FileDeleteReceipt acknowledges media deletion.
 type FileDeleteReceipt struct {
+	// Deleted reports whether the media was deleted.
 	Deleted bool
+	// MediaID is the deleted media identifier.
 	MediaID string
 }
 
+// RetentionLockResult acknowledges a retention lock update.
 type RetentionLockResult struct {
-	MediaID       string
-	Message       string
+	// MediaID is the updated media identifier.
+	MediaID string
+	// Message is the API acknowledgment message.
+	Message string
+	// RetentionLock reports the resulting retention lock state.
 	RetentionLock bool
 }
 
+// ListFilesResponse is the paginated media list response.
 type ListFilesResponse struct {
-	Files      []MediaFile
-	HasMore    bool
+	// Files contains the current page of media files.
+	Files []MediaFile
+	// HasMore reports whether more results are available.
+	HasMore bool
+	// NextCursor is the cursor to request the next page.
 	NextCursor string
 }
 
+// Entity is the stable speaker identity resource.
 type Entity struct {
-	CreatedAt  string
-	ID         string
-	Label      string
+	// CreatedAt is the ISO8601 entity creation timestamp.
+	CreatedAt string
+	// ID is the stable entity identifier.
+	ID string
+	// Label is the optional entity label.
+	Label string
+	// LastSeenAt is the ISO8601 timestamp of the latest related media when available.
 	LastSeenAt string
+	// MediaCount is the number of associated media records.
 	MediaCount float64
 }
 
+// ListEntitiesResponse is the paginated entity list response.
 type ListEntitiesResponse struct {
-	Cursor   string
+	// Cursor is the server cursor for the current page.
+	Cursor string
+	// Entities contains the current page of entities.
 	Entities []Entity
-	HasMore  bool
+	// HasMore reports whether more results are available.
+	HasMore bool
 }
 
+// WebhookEvent is the parsed webhook envelope.
 type WebhookEvent struct {
+	// CreatedAt is the canonical event creation timestamp.
 	CreatedAt string
-	Data      any
-	ID        string
+	// Data is the event payload. Known event types are validated but remain untyped.
+	Data any
+	// ID is the stable event identifier used for deduplication.
+	ID string
+	// Timestamp duplicates CreatedAt for compatibility with event processors.
 	Timestamp string
-	Type      string
-}
-
-type reportJobReceipt struct {
-	EstimatedWaitSec *float64 `json:"estimatedWaitSec"`
-	JobID            string   `json:"jobId"`
-	Stage            string   `json:"stage"`
-	Status           string   `json:"status"`
-}
-
-type reportWire struct {
-	CreatedAt string `json:"createdAt"`
-	Entity    struct {
-		ID    string `json:"id"`
-		Label string `json:"label"`
-	} `json:"entity"`
-	ID       string         `json:"id"`
-	JobID    string         `json:"jobId"`
-	JSON     map[string]any `json:"json"`
-	Label    string         `json:"label"`
-	Markdown string         `json:"markdown"`
-	Media    struct {
-		MediaID string `json:"mediaId"`
-		URL     string `json:"url"`
-	} `json:"media"`
-	Output struct {
-		Template string `json:"template"`
-	} `json:"output"`
-}
-
-type matchingSubjectWire struct {
-	EntityID      string         `json:"entityId"`
-	ResolvedLabel string         `json:"resolvedLabel"`
-	Source        map[string]any `json:"source"`
-}
-
-type matchingWire struct {
-	Context   string                `json:"context"`
-	CreatedAt string                `json:"createdAt"`
-	Group     []matchingSubjectWire `json:"group"`
-	ID        string                `json:"id"`
-	JobID     string                `json:"jobId"`
-	JSON      map[string]any        `json:"json"`
-	Label     string                `json:"label"`
-	Markdown  string                `json:"markdown"`
-	Target    *matchingSubjectWire  `json:"target"`
-}
-
-type mediaObjectWire struct {
-	ContentType     string   `json:"contentType"`
-	CreatedAt       string   `json:"createdAt"`
-	DurationSeconds *float64 `json:"durationSeconds"`
-	Label           string   `json:"label"`
-	MediaID         string   `json:"mediaId"`
-	SizeBytes       *int64   `json:"sizeBytes"`
-}
-
-type mediaFileWire struct {
-	ContentType      string   `json:"contentType"`
-	CreatedAt        string   `json:"createdAt"`
-	DurationSeconds  *float64 `json:"durationSeconds"`
-	Label            string   `json:"label"`
-	LastUsedAt       string   `json:"lastUsedAt"`
-	MediaID          string   `json:"mediaId"`
-	ProcessingStatus string   `json:"processingStatus"`
-	Retention        struct {
-		DaysRemaining *int64 `json:"daysRemaining"`
-		ExpiresAt     string `json:"expiresAt"`
-		Locked        bool   `json:"locked"`
-	} `json:"retention"`
-	SizeBytes *int64 `json:"sizeBytes"`
-}
-
-type entityWire struct {
-	CreatedAt  string  `json:"createdAt"`
-	ID         string  `json:"id"`
-	Label      string  `json:"label"`
-	LastSeenAt string  `json:"lastSeenAt"`
-	MediaCount float64 `json:"mediaCount"`
-}
-
-type jobWire struct {
-	CreatedAt string `json:"createdAt"`
-	Credits   *struct {
-		ReservedCredits   *float64 `json:"reservedCredits"`
-		ReservationStatus string   `json:"reservationStatus"`
-	} `json:"credits"`
-	Error *struct {
-		Code      string `json:"code"`
-		Details   any    `json:"details"`
-		Message   string `json:"message"`
-		Retryable *bool  `json:"retryable"`
-	} `json:"error"`
-	ID              string   `json:"id"`
-	MatchingID      string   `json:"matchingId"`
-	Progress        *float64 `json:"progress"`
-	ReleasedCredits *float64 `json:"releasedCredits"`
-	ReportID        string   `json:"reportId"`
-	RequestID       string   `json:"requestId"`
-	Stage           string   `json:"stage"`
-	Status          string   `json:"status"`
-	Type            string   `json:"type"`
-	UpdatedAt       string   `json:"updatedAt"`
-	Usage           *struct {
-		CreditsDiscounted *float64 `json:"creditsDiscounted"`
-		CreditsNetUsed    float64  `json:"creditsNetUsed"`
-		CreditsUsed       float64  `json:"creditsUsed"`
-		DurationMS        *float64 `json:"durationMs"`
-		ModelVersion      string   `json:"modelVersion"`
-	} `json:"usage"`
+	// Type is the event type, such as report.completed.
+	Type string
 }
 
 func parseJob(data []byte) (*Job, error) {
-	var wire jobWire
+	var wire internalwire.Job
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
@@ -311,8 +316,8 @@ func parseJob(data []byte) (*Job, error) {
 	return job, nil
 }
 
-func parseJobReceipt(data []byte) (*reportJobReceipt, error) {
-	var wire reportJobReceipt
+func parseJobReceipt(data []byte) (*internalwire.JobReceipt, error) {
+	var wire internalwire.JobReceipt
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
@@ -323,7 +328,7 @@ func parseJobReceipt(data []byte) (*reportJobReceipt, error) {
 }
 
 func parseReport(data []byte) (*Report, error) {
-	var wire reportWire
+	var wire internalwire.Report
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
@@ -352,7 +357,7 @@ func parseReport(data []byte) (*Report, error) {
 }
 
 func parseMatching(data []byte) (*MatchingAnalysisResponse, error) {
-	var wire matchingWire
+	var wire internalwire.Matching
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
@@ -387,7 +392,7 @@ func parseMatching(data []byte) (*MatchingAnalysisResponse, error) {
 }
 
 func parseMediaObject(data []byte) (*MediaObject, error) {
-	var wire mediaObjectWire
+	var wire internalwire.MediaObject
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
@@ -403,7 +408,7 @@ func parseMediaObject(data []byte) (*MediaObject, error) {
 }
 
 func parseMediaFile(data []byte) (*MediaFile, error) {
-	var wire mediaFileWire
+	var wire internalwire.MediaFile
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
@@ -434,27 +439,46 @@ func parseMediaFile(data []byte) (*MediaFile, error) {
 }
 
 func parseListFiles(data []byte) (*ListFilesResponse, error) {
-	var payload struct {
-		Files      []mediaFileWire `json:"files"`
-		HasMore    bool            `json:"hasMore"`
-		NextCursor string          `json:"nextCursor"`
-	}
+	var payload internalwire.ListFilesResponse
 	if err := decodeJSON(data, &payload); err != nil {
 		return nil, err
 	}
 	files := make([]MediaFile, 0, len(payload.Files))
 	for _, item := range payload.Files {
-		encoded, err := json.Marshal(item)
-		if err != nil {
-			return nil, &ConduitError{Code: "invalid_response", Message: "invalid files response", Cause: err}
-		}
-		file, err := parseMediaFile(encoded)
+		file, err := mapMediaFile(item)
 		if err != nil {
 			return nil, err
 		}
 		files = append(files, *file)
 	}
 	return &ListFilesResponse{Files: files, HasMore: payload.HasMore, NextCursor: payload.NextCursor}, nil
+}
+
+func mapMediaFile(wire internalwire.MediaFile) (*MediaFile, error) {
+	if err := requireFields(
+		requireString(wire.MediaID, "media.mediaId"),
+		requireString(wire.CreatedAt, "media.createdAt"),
+		requireString(wire.ContentType, "media.contentType"),
+		requireString(wire.Label, "media.label"),
+		requireString(wire.ProcessingStatus, "media.processingStatus"),
+	); err != nil {
+		return nil, err
+	}
+	return &MediaFile{
+		ContentType:      wire.ContentType,
+		CreatedAt:        wire.CreatedAt,
+		DurationSeconds:  wire.DurationSeconds,
+		Label:            wire.Label,
+		LastUsedAt:       wire.LastUsedAt,
+		MediaID:          wire.MediaID,
+		ProcessingStatus: wire.ProcessingStatus,
+		Retention: MediaRetention{
+			DaysRemaining: wire.Retention.DaysRemaining,
+			ExpiresAt:     wire.Retention.ExpiresAt,
+			Locked:        wire.Retention.Locked,
+		},
+		SizeBytes: wire.SizeBytes,
+	}, nil
 }
 
 func parseDeleteReceipt(data []byte) (*FileDeleteReceipt, error) {
@@ -483,10 +507,14 @@ func parseRetentionLock(data []byte) (*RetentionLockResult, error) {
 }
 
 func parseEntity(data []byte) (*Entity, error) {
-	var wire entityWire
+	var wire internalwire.Entity
 	if err := decodeJSON(data, &wire); err != nil {
 		return nil, err
 	}
+	return mapEntity(wire)
+}
+
+func mapEntity(wire internalwire.Entity) (*Entity, error) {
 	if err := requireFields(
 		requireString(wire.ID, "entity.id"),
 		requireString(wire.CreatedAt, "entity.createdAt"),
@@ -497,21 +525,13 @@ func parseEntity(data []byte) (*Entity, error) {
 }
 
 func parseListEntities(data []byte) (*ListEntitiesResponse, error) {
-	var payload struct {
-		Cursor   string       `json:"cursor"`
-		Entities []entityWire `json:"entities"`
-		HasMore  bool         `json:"hasMore"`
-	}
+	var payload internalwire.ListEntitiesResponse
 	if err := decodeJSON(data, &payload); err != nil {
 		return nil, err
 	}
 	entities := make([]Entity, 0, len(payload.Entities))
 	for _, item := range payload.Entities {
-		encoded, err := json.Marshal(item)
-		if err != nil {
-			return nil, &ConduitError{Code: "invalid_response", Message: "invalid entities response", Cause: err}
-		}
-		entity, err := parseEntity(encoded)
+		entity, err := mapEntity(item)
 		if err != nil {
 			return nil, err
 		}
@@ -521,7 +541,7 @@ func parseListEntities(data []byte) (*ListEntitiesResponse, error) {
 }
 
 func parseWebhookEvent(payload []byte) (*WebhookEvent, error) {
-	var event WebhookEvent
+	var event internalwire.WebhookEvent
 	if err := decodeJSON(payload, &event); err != nil {
 		return nil, err
 	}
@@ -533,7 +553,7 @@ func parseWebhookEvent(payload []byte) (*WebhookEvent, error) {
 	); err != nil {
 		return nil, err
 	}
-	return &event, nil
+	return &WebhookEvent{CreatedAt: event.CreatedAt, Data: event.Data, ID: event.ID, Timestamp: event.Timestamp, Type: event.Type}, nil
 }
 
 func decodeJSON(data []byte, target any) error {

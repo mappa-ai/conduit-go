@@ -9,8 +9,10 @@ import (
 	"strings"
 )
 
+// MatchingContextHiringTeamFit is the stable hiring team fit matching context.
 const MatchingContextHiringTeamFit = "hiring_team_fit"
 
+// MatchingSubject references an entity or media target for matching.
 type MatchingSubject struct {
 	kind     matchingSubjectKind
 	entityID string
@@ -25,42 +27,61 @@ const (
 	matchingSubjectKindMedia  matchingSubjectKind = "media_target"
 )
 
+// CreateMatchingRequest creates a matching analysis job.
 type CreateMatchingRequest struct {
-	Context        string
-	Group          []MatchingSubject
+	// Context is the stable matching context identifier.
+	Context string
+	// Group contains one or more comparison subjects.
+	Group []MatchingSubject
+	// IdempotencyKey scopes retries and duplicate submission protection for create.
 	IdempotencyKey string
-	RequestID      string
-	Target         MatchingSubject
-	Webhook        *Webhook
+	// RequestID overrides the SDK-generated request identifier.
+	RequestID string
+	// Target identifies the subject being evaluated against the group.
+	Target MatchingSubject
+	// Webhook configures async completion delivery.
+	Webhook *Webhook
 }
 
+// MatchingJobReceipt acknowledges accepted matching work.
 type MatchingJobReceipt struct {
+	// EstimatedWaitSec is the API-provided advisory wait estimate when available.
 	EstimatedWaitSec *float64
-	Handle           *MatchingRunHandle
-	JobID            string
-	Stage            string
-	Status           string
+	// Handle provides secondary wait, stream, cancel, and fetch helpers.
+	Handle *MatchingRunHandle
+	// JobID is the accepted matching job identifier.
+	JobID string
+	// Stage is the current advisory stage when provided by the API.
+	Stage string
+	// Status is the accepted job status, typically queued or running.
+	Status string
 }
 
+// MatchingRunHandle provides secondary synchronous helpers for a matching job.
 type MatchingRunHandle struct {
 	jobID    string
 	jobs     *JobsResource
 	matching *MatchingResource
 }
 
+// MatchingResource exposes matching workflows.
 type MatchingResource struct {
 	jobs      *JobsResource
 	transport *transport
 }
 
+// MatchingEntity references an entity subject.
 func MatchingEntity(entityID string) MatchingSubject {
 	return MatchingSubject{kind: matchingSubjectKindEntity, entityID: entityID}
 }
 
+// MatchingMedia references a media subject plus selector.
 func MatchingMedia(mediaID string, selector TargetSelector) MatchingSubject {
 	return MatchingSubject{kind: matchingSubjectKindMedia, mediaID: mediaID, selector: &selector}
 }
 
+// Create validates the canonical target-versus-group payload, creates the job,
+// and returns a receipt after the work has been accepted by the API.
 func (r *MatchingResource) Create(ctx context.Context, request CreateMatchingRequest) (*MatchingJobReceipt, error) {
 	contextValue, err := normalizeMatchingContext(request.Context)
 	if err != nil {
@@ -110,6 +131,7 @@ func (r *MatchingResource) Create(ctx context.Context, request CreateMatchingReq
 	return &MatchingJobReceipt{EstimatedWaitSec: receipt.EstimatedWaitSec, Handle: &MatchingRunHandle{jobID: receipt.JobID, jobs: r.jobs, matching: r}, JobID: receipt.JobID, Stage: receipt.Stage, Status: receipt.Status}, nil
 }
 
+// Get fetches a completed matching result by ID.
 func (r *MatchingResource) Get(ctx context.Context, matchingID string) (*MatchingAnalysisResponse, error) {
 	validated, err := requireNonEmpty(matchingID, "matchingID")
 	if err != nil {
@@ -137,13 +159,15 @@ func (r *MatchingResource) getByJob(ctx context.Context, jobID string) (*Matchin
 	return parseMatching(response.body)
 }
 
-func (h *MatchingRunHandle) Stream(ctx context.Context, options *StreamOptions) error {
-	_, err := h.jobs.stream(ctx, h.jobID, options)
-	return err
+// Stream opens the SSE job stream for the matching run.
+func (h *MatchingRunHandle) Stream(ctx context.Context, options *StreamOptions) (*JobStream, error) {
+	return h.jobs.stream(ctx, h.jobID, options)
 }
 
+// Wait blocks until the matching job reaches a terminal state and then fetches
+// the completed matching result.
 func (h *MatchingRunHandle) Wait(ctx context.Context, options *WaitOptions) (*MatchingAnalysisResponse, error) {
-	job, err := h.jobs.stream(ctx, h.jobID, options)
+	job, err := h.jobs.wait(ctx, h.jobID, options)
 	if err != nil {
 		return nil, err
 	}
@@ -163,14 +187,18 @@ func (h *MatchingRunHandle) Wait(ctx context.Context, options *WaitOptions) (*Ma
 	}
 }
 
+// Cancel requests cancellation for the matching job.
 func (h *MatchingRunHandle) Cancel(ctx context.Context) (*Job, error) {
 	return h.jobs.Cancel(ctx, CancelJobRequest{JobID: h.jobID})
 }
 
+// Job fetches the latest job state.
 func (h *MatchingRunHandle) Job(ctx context.Context) (*Job, error) {
 	return h.jobs.Get(ctx, h.jobID)
 }
 
+// Matching fetches the completed matching result by job ID and returns nil when
+// the API has not materialized the result yet.
 func (h *MatchingRunHandle) Matching(ctx context.Context) (*MatchingAnalysisResponse, error) {
 	return h.matching.getByJob(ctx, h.jobID)
 }

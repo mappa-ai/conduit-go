@@ -10,90 +10,136 @@ import (
 )
 
 const (
+	// ReportTemplateGeneralReport requests the default general-purpose report template.
 	ReportTemplateGeneralReport = "general_report"
+	// ReportTemplateSalesPlaybook requests the sales-focused report template.
 	ReportTemplateSalesPlaybook = "sales_playbook"
-	OnMissError                 = "error"
-	OnMissFallbackDominant      = "fallback_dominant"
-	TargetStrategyDominant      = "dominant"
-	TargetStrategyEntityID      = "entity_id"
-	TargetStrategyMagicHint     = "magic_hint"
-	TargetStrategyTimeRange     = "timerange"
+	// OnMissError preserves strict target selection and fails when no match is found.
+	OnMissError = "error"
+	// OnMissFallbackDominant falls back to the dominant speaker when targeting misses.
+	OnMissFallbackDominant = "fallback_dominant"
+	// TargetStrategyDominant selects the dominant speaker.
+	TargetStrategyDominant = "dominant"
+	// TargetStrategyEntityID selects a previously identified entity.
+	TargetStrategyEntityID = "entity_id"
+	// TargetStrategyMagicHint selects a best-effort natural-language hint.
+	TargetStrategyMagicHint = "magic_hint"
+	// TargetStrategyTimeRange selects a speaker by time bounds.
+	TargetStrategyTimeRange = "timerange"
 )
 
+// Webhook configures delivery for terminal job notifications.
 type Webhook struct {
+	// Headers are optional static headers attached to webhook delivery.
 	Headers map[string]string
-	URL     string
+	// URL is the destination that receives webhook events.
+	URL string
 }
 
+// ReportOutputRequest configures report output rendering.
 type ReportOutputRequest struct {
-	Template       string
+	// Template is one of the stable report template identifiers.
+	Template string
+	// TemplateParams carries template-specific rendering inputs.
 	TemplateParams map[string]any
 }
 
+// TimeRange selects a target by time bounds.
 type TimeRange struct {
-	EndSeconds   *float64
+	// EndSeconds is the exclusive upper bound in seconds.
+	EndSeconds *float64
+	// StartSeconds is the inclusive lower bound in seconds.
 	StartSeconds *float64
 }
 
+// TargetSelector selects the speaker to analyze.
 type TargetSelector struct {
-	EntityID  string
-	Hint      string
-	OnMiss    string
-	Strategy  string
+	// EntityID is required when Strategy is TargetStrategyEntityID.
+	EntityID string
+	// Hint is required when Strategy is TargetStrategyMagicHint.
+	Hint string
+	// OnMiss controls fallback behavior when the requested target cannot be resolved.
+	OnMiss string
+	// Strategy selects the target resolution mode.
+	Strategy string
+	// TimeRange is required when Strategy is TargetStrategyTimeRange.
 	TimeRange *TimeRange
 }
 
+// CreateReportRequest creates a report generation job.
 type CreateReportRequest struct {
+	// IdempotencyKey scopes retries and duplicate submission protection for create.
 	IdempotencyKey string
-	Output         ReportOutputRequest
-	RequestID      string
-	Source         Source
-	Target         TargetSelector
-	Webhook        *Webhook
+	// Output selects the report template and optional template params.
+	Output ReportOutputRequest
+	// RequestID overrides the SDK-generated request identifier.
+	RequestID string
+	// Source identifies the media to analyze.
+	Source Source
+	// Target selects the speaker to analyze.
+	Target TargetSelector
+	// Webhook configures async completion delivery.
+	Webhook *Webhook
 }
 
+// ReportJobReceipt acknowledges accepted report work.
 type ReportJobReceipt struct {
+	// EstimatedWaitSec is the API-provided advisory wait estimate when available.
 	EstimatedWaitSec *float64
-	Handle           *ReportRunHandle
-	JobID            string
-	MediaID          string
-	Stage            string
-	Status           string
+	// Handle provides secondary wait, stream, cancel, and fetch helpers.
+	Handle *ReportRunHandle
+	// JobID is the accepted report job identifier.
+	JobID string
+	// MediaID is the resolved uploaded media identifier when known.
+	MediaID string
+	// Stage is the current advisory stage when provided by the API.
+	Stage string
+	// Status is the accepted job status, typically queued or running.
+	Status string
 }
 
+// ReportRunHandle provides secondary synchronous helpers for a report job.
 type ReportRunHandle struct {
 	jobID   string
 	jobs    *JobsResource
 	reports *ReportsResource
 }
 
+// ReportsResource exposes report workflows.
 type ReportsResource struct {
 	jobs      *JobsResource
 	media     *MediaResource
 	transport *transport
 }
 
+// TargetDominant selects the dominant speaker.
 func TargetDominant() TargetSelector {
 	return TargetSelector{Strategy: TargetStrategyDominant}
 }
 
+// TargetEntityID selects a known entity.
 func TargetEntityID(entityID string) TargetSelector {
 	return TargetSelector{EntityID: entityID, Strategy: TargetStrategyEntityID}
 }
 
+// TargetMagicHint selects a best-effort natural language hint.
 func TargetMagicHint(hint string) TargetSelector {
 	return TargetSelector{Hint: hint, Strategy: TargetStrategyMagicHint}
 }
 
+// TargetTimeRange selects a speaker by time bounds.
 func TargetTimeRange(startSeconds *float64, endSeconds *float64) TargetSelector {
 	return TargetSelector{Strategy: TargetStrategyTimeRange, TimeRange: &TimeRange{EndSeconds: endSeconds, StartSeconds: startSeconds}}
 }
 
+// WithOnMiss configures target fallback behavior.
 func (t TargetSelector) WithOnMiss(onMiss string) TargetSelector {
 	t.OnMiss = onMiss
 	return t
 }
 
+// Create resolves the source, uploads when needed, creates the job, and returns
+// a receipt after the work has been accepted by the API.
 func (r *ReportsResource) Create(ctx context.Context, request CreateReportRequest) (*ReportJobReceipt, error) {
 	output, err := normalizeReportOutput(request.Output)
 	if err != nil {
@@ -147,6 +193,7 @@ func (r *ReportsResource) Create(ctx context.Context, request CreateReportReques
 	}, nil
 }
 
+// Get fetches a completed report by ID.
 func (r *ReportsResource) Get(ctx context.Context, reportID string) (*Report, error) {
 	validated, err := requireNonEmpty(reportID, "reportID")
 	if err != nil {
@@ -174,13 +221,15 @@ func (r *ReportsResource) getByJob(ctx context.Context, jobID string) (*Report, 
 	return parseReport(response.body)
 }
 
-func (h *ReportRunHandle) Stream(ctx context.Context, options *StreamOptions) error {
-	_, err := h.jobs.stream(ctx, h.jobID, options)
-	return err
+// Stream opens the SSE job stream for the report run.
+func (h *ReportRunHandle) Stream(ctx context.Context, options *StreamOptions) (*JobStream, error) {
+	return h.jobs.stream(ctx, h.jobID, options)
 }
 
+// Wait blocks until the report job reaches a terminal state and then fetches the
+// completed report.
 func (h *ReportRunHandle) Wait(ctx context.Context, options *WaitOptions) (*Report, error) {
-	job, err := h.jobs.stream(ctx, h.jobID, options)
+	job, err := h.jobs.wait(ctx, h.jobID, options)
 	if err != nil {
 		return nil, err
 	}
@@ -200,14 +249,18 @@ func (h *ReportRunHandle) Wait(ctx context.Context, options *WaitOptions) (*Repo
 	}
 }
 
+// Cancel requests cancellation for the report job.
 func (h *ReportRunHandle) Cancel(ctx context.Context) (*Job, error) {
 	return h.jobs.Cancel(ctx, CancelJobRequest{JobID: h.jobID})
 }
 
+// Job fetches the latest job state.
 func (h *ReportRunHandle) Job(ctx context.Context) (*Job, error) {
 	return h.jobs.Get(ctx, h.jobID)
 }
 
+// Report fetches the completed report by job ID and returns nil when the API has
+// not materialized the report yet.
 func (h *ReportRunHandle) Report(ctx context.Context) (*Report, error) {
 	return h.reports.getByJob(ctx, h.jobID)
 }

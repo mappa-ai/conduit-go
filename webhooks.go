@@ -11,8 +11,10 @@ import (
 	"time"
 )
 
+// WebhooksResource verifies and parses webhook deliveries.
 type WebhooksResource struct{}
 
+// VerifySignature verifies the conduit-signature webhook header.
 func (r *WebhooksResource) VerifySignature(payload []byte, headers http.Header, secret string, tolerance time.Duration) error {
 	if tolerance <= 0 {
 		tolerance = 5 * time.Minute
@@ -40,6 +42,7 @@ func (r *WebhooksResource) VerifySignature(payload []byte, headers http.Header, 
 	return nil
 }
 
+// ParseEvent parses and validates a webhook payload.
 func (r *WebhooksResource) ParseEvent(payload []byte) (*WebhookEvent, error) {
 	event, err := parseWebhookEvent(payload)
 	if err != nil {
