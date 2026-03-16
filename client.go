@@ -11,7 +11,7 @@ const (
 	defaultStreamTimeout = 5 * time.Minute
 	defaultTimeout       = 30 * time.Second
 	defaultMaxRetries    = 2
-	defaultUserAgent     = "conduit-go/0.1.7"
+	defaultUserAgent     = "conduit-go/0.1.8"
 )
 
 // DefaultMaxSourceBytes is the default maximum size for local and remote sources.
