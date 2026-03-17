@@ -258,7 +258,7 @@ log.Println(report.ID)
 
 ## Support
 
-- API docs: [api-docs.mappa.ai](https://api-docs.mappa.ai)
+- API docs: [docs.conduit.mappa.ai](https://docs.conduit.mappa.ai)
 - SDK issues: use the issue tracker in this repository
 
 ## Local checks

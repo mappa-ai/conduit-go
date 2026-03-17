@@ -9,9 +9,9 @@ import (
 const (
 	defaultBaseURL       = "https://api.mappa.ai"
 	defaultStreamTimeout = 5 * time.Minute
-	defaultTimeout       = 30 * time.Second
+	defaultTimeout       = 5 * time.Minute
 	defaultMaxRetries    = 2
-	defaultUserAgent     = "conduit-go/0.1.8"
+	defaultUserAgent     = "conduit-go/0.1.11"
 )
 
 // DefaultMaxSourceBytes is the default maximum size for local and remote sources.
