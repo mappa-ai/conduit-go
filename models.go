@@ -191,6 +191,8 @@ type MediaFile struct {
 	CreatedAt string
 	// DurationSeconds is the detected media duration when available.
 	DurationSeconds *float64
+	// HasReports reports whether the media already has associated reports.
+	HasReports bool
 	// Label is the media label.
 	Label string
 	// LastUsedAt is the ISO8601 timestamp for the last use when available.
@@ -425,6 +427,7 @@ func parseMediaFile(data []byte) (*MediaFile, error) {
 		ContentType:      wire.ContentType,
 		CreatedAt:        wire.CreatedAt,
 		DurationSeconds:  wire.DurationSeconds,
+		HasReports:       wire.HasReports,
 		Label:            wire.Label,
 		LastUsedAt:       wire.LastUsedAt,
 		MediaID:          wire.MediaID,
@@ -468,6 +471,7 @@ func mapMediaFile(wire internalwire.MediaFile) (*MediaFile, error) {
 		ContentType:      wire.ContentType,
 		CreatedAt:        wire.CreatedAt,
 		DurationSeconds:  wire.DurationSeconds,
+		HasReports:       wire.HasReports,
 		Label:            wire.Label,
 		LastUsedAt:       wire.LastUsedAt,
 		MediaID:          wire.MediaID,
