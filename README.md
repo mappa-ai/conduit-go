@@ -141,7 +141,7 @@ Matching follows the same receipt-first async model as reports.
 
 ```go
 receipt, err := client.Matching.Create(context.Background(), conduit.CreateMatchingRequest{
-	Context: conduit.MatchingContextHiringTeamFit,
+	Context: conduit.MatchingContextBehavioralCompatibility,
 	Target:  conduit.MatchingEntity("ent_candidate"),
 	Group: []conduit.MatchingSubject{
 		conduit.MatchingEntity("ent_manager"),

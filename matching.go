@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// MatchingContextHiringTeamFit is the stable hiring team fit matching context.
-const MatchingContextHiringTeamFit = "hiring_team_fit"
+// MatchingContextBehavioralCompatibility is the stable behavioral compatibility matching context.
+const MatchingContextBehavioralCompatibility = "behavioral_compatibility"
 
 // MatchingSubject references an entity or media target for matching.
 type MatchingSubject struct {
@@ -204,8 +204,8 @@ func (h *MatchingRunHandle) Matching(ctx context.Context) (*MatchingAnalysisResp
 }
 
 func normalizeMatchingContext(context string) (string, error) {
-	if strings.TrimSpace(context) != MatchingContextHiringTeamFit {
-		return "", &ConduitError{Code: "invalid_request", Message: "context must be hiring_team_fit"}
+	if strings.TrimSpace(context) != MatchingContextBehavioralCompatibility {
+		return "", &ConduitError{Code: "invalid_request", Message: "context must be behavioral_compatibility"}
 	}
 	return context, nil
 }
