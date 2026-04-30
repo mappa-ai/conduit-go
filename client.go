@@ -85,6 +85,8 @@ type Client struct {
 	Reports *ReportsResource
 	// Matching exposes matching workflows.
 	Matching *MatchingResource
+	// Psychometrics exposes the sync psychometrics workflow.
+	Psychometrics *PsychometricsResource
 	// Primitives exposes the stable low-level surface for advanced integrations.
 	Primitives *PrimitivesResource
 	// Webhooks exposes webhook verification and parsing helpers.
@@ -131,9 +133,10 @@ func New(apiKey string, opts ...Option) (*Client, error) {
 	media := &MediaResource{transport: transport, timeout: config.timeout, maxSourceBytes: config.maxSourceBytes}
 	entities := &EntitiesResource{transport: transport}
 	client := &Client{
-		transport: transport,
-		Reports:   &ReportsResource{transport: transport, jobs: jobs, media: media},
-		Matching:  &MatchingResource{transport: transport, jobs: jobs},
+		transport:     transport,
+		Reports:       &ReportsResource{transport: transport, jobs: jobs, media: media},
+		Matching:      &MatchingResource{transport: transport, jobs: jobs},
+		Psychometrics: &PsychometricsResource{transport: transport, media: media},
 		Primitives: &PrimitivesResource{
 			Entities: entities,
 			Media:    media,

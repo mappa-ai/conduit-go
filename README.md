@@ -16,6 +16,8 @@ Stable SDK scope is intentionally small:
 
 - `client.Reports.Create(...)`
 - `client.Reports.Get(...)`
+- `client.Psychometrics.Create(...)`
+- `client.Psychometrics.Get(...)`
 - `client.Matching.Create(...)`
 - `client.Matching.Get(...)`
 - `client.Webhooks.VerifySignature(...)`
@@ -23,7 +25,7 @@ Stable SDK scope is intentionally small:
 
 Advanced stable primitives are available under `client.Primitives.Entities`, `client.Primitives.Media`, and `client.Primitives.Jobs`.
 
-Conduit jobs are asynchronous and commonly take around 150 seconds. Use webhooks as the default completion path. `Handle.Wait(...)` and `Handle.Stream(...)` are fallback control paths for local development, scripts, and operator tooling.
+Conduit jobs are asynchronous and commonly take around 150 seconds. Use webhooks as the default completion path. `Handle.Wait(...)` and `Handle.Stream(...)` are fallback control paths for local development, scripts, and operator tooling. `Psychometrics` is the additional stable sync workflow for direct trait-map access.
 
 ## Quickstart
 
@@ -134,6 +136,28 @@ Runtime and transport behavior:
 - The client timeout budget applies to remote fetch, upload, and API create unless you provide a narrower `context.Context` deadline.
 - `SourcePath(...)`, `SourceBytes(...)`, `SourceReader(...)`, and `SourceURL(...)` may materialize upload payloads in memory before submission.
 - `Reports.Create(...)` returns a receipt only after upload succeeds and the job is accepted.
+
+## Psychometrics
+
+Psychometrics is the additional stable sync workflow for direct trait-map access.
+
+```go
+result, err := client.Psychometrics.Create(context.Background(), conduit.CreatePsychometricsRequest{
+	Source: conduit.PsychometricsSourcePath("./call.wav"),
+	Target: conduit.PsychometricsTargetMagicHint("the candidate"),
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+log.Printf("analysis=%s conscientiousness=%f", result.AnalysisID, result.Psychometrics["conscientiousness"])
+```
+
+Stable psychometrics constraints:
+
+- source helpers are `PsychometricsSourceBytes`, `PsychometricsSourceReader`, `PsychometricsSourceURL`, and `PsychometricsSourcePath`
+- target helpers are `PsychometricsTargetDominant()` and `PsychometricsTargetMagicHint(...)`
+- `Psychometrics.Get(...)` fetches a previously completed analysis by `analysisId`
 
 ## Matching
 
